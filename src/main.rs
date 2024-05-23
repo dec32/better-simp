@@ -101,10 +101,11 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
 
 
     // 输出满足前提的类推
-    // TODO 有以下两个问题没有解决：
+    // TODO 有以下三个问题没有解决：
     // 递归类推：类推得到的映射再次作为类推的依据（故需把繁字作为 key）
     // 链式类推：映射的简字可根据其他依据进行再次类推（故需把简字作为 key）
-    // 输出时最好保留插入顺序（故不能用 HashMap）
+    // 多因类推：由多条类推规则共同生成的类推
+    // 另外还要想办法保留插入顺序（故不能用 HashMap）
     for infer in infers {
         if premise.contains(&infer.premise) {
             output.extend(infer.output)
@@ -119,7 +120,7 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
 
 fn main() {
 
-    let path = env::args().nth(1).unwrap_or("./res/简化字批评.xlsx".to_string());
+    let path = env::args().nth(1).unwrap_or("./简化字批评.xlsx".to_string());
     let patch = false;
 
     let mut workbook: Xlsx<_> = open_workbook(path).unwrap();
