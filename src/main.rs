@@ -138,14 +138,19 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
         }
     }
 
+    // 输出到文件
     let mut text = String::with_capacity(output.len() * 10);
+    let mut dup = HashSet::new();
     for mapping in output {
+        // OpenCC 不允许重复项
+        if !dup.insert(mapping.trad) {
+            continue;
+        }
         text.push(mapping.trad);
         text.push('\t');
         text.push(mapping.simp);
         text.push('\n');
     }
-    print!("{text}");
     fs::write("./TSCharacters.txt", text).unwrap()
 }
 
