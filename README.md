@@ -53,3 +53,53 @@
 
 也可以使用命令 `simp <表格路径>` 来指定表格路径。
 
+## 集成到 RIME
+
+在 `%APPDATA%/Rime/opencc` 下创建 `TPCharacters.txt`，写入映射字典，并在同一目录下新建 OpenCC 配置 `t2p.json` 来调用它：
+
+```JSON
+{
+  "name": "",
+  "segmentation": {
+    "type": "mmseg",
+    "dict": {
+      "type": "text",
+      "file": "TPCharacters.txt"
+    }
+  },
+  "conversion_chain": [{
+    "dict": {
+      "type": "text",
+      "file": "TPCharacters.txt"
+    }
+  }]
+}
+
+```
+
+之后为输入法配置功能开关以及简化器。以「朙月拼音」为例，在 `%APPDATA%/Rime` 下新建补丁文件 `luna_pinyin.schema.custom.yaml`：
+
+```YAML
+patch:
+  switches:
+    - name: ascii_mode
+      reset: 0
+      states: [ 中文, 西文 ]
+    - name: full_shape
+      states: [ 半角, 全角 ]
+    - options: [ trad, priv, simp ] # 用来控制简化器的三个互斥选项，取代了 `name: simplification`
+      states: [ 繁體, 䋣躰, 简体 ]   # 选项的名字
+    - name: ascii_punct
+      states: [ 。，, ．， ]
+  engine/filters:
+    - simplifier@simp # 标准简化器
+    - simplifier@priv # 自定简化器
+    - uniquifier
+  simp:
+    option_name: simp        # 当 switches 中的选项 simp 被激活时
+    opencc_config: t2s.json  # 使用标准简化配置 t2s.json
+  priv:
+    option_name: priv        # 当 switches 中的选项 priv 被激活时
+    opencc_config: t2p.json  # 使用自定简化配置 t2p.json
+```
+
