@@ -1,6 +1,7 @@
-use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}};
+use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}, path::{self, Path}};
 
 use calamine::{open_workbook, Data, Reader, Xlsx};
+use getargs::{Arg, Options, Positionals};
 
 /// 表示一组简化和对其的批评。Critique 这个词太难打了，所以使用 Review。
 #[derive(Clone, Copy)]
@@ -79,7 +80,7 @@ impl CharExt for char {
 
 
 /// 生成 OpenCC 映射表
-fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: Vec<Review>, rules: Vec<Rule>) {
+fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: Vec<Review>, rules: Vec<Rule>, output_path: &str){
     let mut premise = HashSet::new();
     let mut output = Vec::new();
     // 非类推字用于输出
@@ -151,14 +152,41 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
         text.push(mapping.simp);
         text.push('\n');
     }
-    fs::write("./TSCharacters.txt", text).unwrap()
+    fs::write(output_path, text).unwrap();
 }
 
 
 fn main() {
+    let mut workbook_path = "./简化字批评.xlsx";
+    let mut output_path = "./TSCharacters.txt";
 
-    let path = env::args().nth(1).unwrap_or("./简化字批评.xlsx".to_string());
-    let mut workbook: Xlsx<_> = open_workbook(path).unwrap();
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let args = args.iter().map(String::as_str);
+    let mut opts = Options::new(args);
+    while let Some(opt) = opts.next_arg().expect("无法解析命令行参数。") {
+        match opt {
+            Arg::Long("rime") | Arg::Short('r') => {
+                output_path = format!("{}/rime/opencc/TPCharacters.txt", env::var_os("APPDATA").unwrap().to_str().unwrap()).leak();
+            }
+            Arg::Positional(p) => {
+                workbook_path = p;
+            }
+            Arg::Long("output") | Arg::Short('o') => {
+                output_path = opts.value_opt().expect("无法获取输出路径参数。")
+            }
+            _ => {
+                println!("使用: ");
+                println!("  simp [<路径>][--output <输出目标>][--rime]");
+                println!("说明: ");
+                println!("  位置参数: 表格路径，默认为 ./简化字批评.xlsx");
+                println!("  --output: 输出路径，默认为 ./TSCharacters.txt");
+                println!("  --rime: 把方案自动输出到 %APPDATA%/rime/opencc 供 RIME 使用");
+                return;
+            }
+        }
+    }
+
+    let mut workbook: Xlsx<_> = open_workbook(workbook_path).unwrap();
 
     // 非类推字
     let mut char_reviews = Vec::new();
@@ -211,7 +239,7 @@ fn main() {
         }
     }
 
-    gen(char_reviews, ichar_reviews, radical_reviews, rules);
+    gen(char_reviews, ichar_reviews, radical_reviews, rules, output_path);
 }
 
 
