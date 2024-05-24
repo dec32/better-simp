@@ -94,13 +94,13 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
 
     // 整理类推：给每一组类推简化评分，并把当中**可用**的那些按繁字归类
     // 至少要有一个依据被用户承认才能算「可用」
-    let mut trad_to_mappings = HashMap::new();
+    let mut inferred_mappings = HashMap::new();
     let mut scores = HashMap::new();
     for rule in rules.iter() {
         if premise.contains(&rule.premise) {
             for mapping in rule.output.iter().cloned() {
                 scores.entry(mapping).or_insert(0).add_assign(1);
-                trad_to_mappings.entry(mapping.trad).or_insert_with(HashSet::new).insert(mapping);
+                inferred_mappings.entry(mapping.trad).or_insert_with(HashSet::new).insert(mapping);
             }
         } else {
             for mapping in rule.output.iter().cloned() {
@@ -110,19 +110,10 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
     }
 
     // 处理发生冲突的可用类推，只保留最高分的那个
-    let mut trad_to_mapping = HashMap::new();
-    for (trad, mappings) in trad_to_mappings {
-        let mut mappings = mappings.into_iter();
-        let mut best_mapping = mappings.next().unwrap();
-        let mut best_score = scores[&best_mapping];
-        for mapping in mappings {
-            let score = scores[&mapping];
-            if score > best_score {
-                best_mapping = mapping;
-                best_score = score;
-            }
-        }
-        trad_to_mapping.insert(trad, best_mapping);
+    let mut inferred_simps = HashMap::new();
+    for (trad, mappings) in inferred_mappings {
+        let best_simp = mappings.into_iter().max_by(|m1, m2|scores[m1].cmp(&scores[m2])).unwrap().simp;
+        inferred_simps.insert(trad, best_simp);
     }
 
     // 固定类推：若已有简化 A->B 被定义，那么类推 A->C 被无视
@@ -130,27 +121,22 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
     let mut pinned_trads = HashSet::new();
     for mapping in output.iter_mut() {
         pinned_trads.insert(mapping.trad);
-        if let Some(chain) = trad_to_mapping.get(&mapping.simp) {
-            mapping.simp = chain.simp;
+        if let Some(simpler_simp) = inferred_simps.get(&mapping.simp).cloned() {
+            mapping.simp = simpler_simp;
         };
     }
 
-    // 把可用的类推追加到输出里
+    // 把可用的类推追加到输出里（但要按照表格的顺序来）
     for rule in rules {
         if !premise.contains(&rule.premise) {
             continue;
         }
         for mapping in rule.output {
-            if trad_to_mapping[&mapping.trad] != mapping {
-                continue;
+            if mapping.simp == inferred_simps[&mapping.trad] {
+                output.push(mapping)
             }
-            if pinned_trads.contains(&mapping.trad) {
-                continue;
-            }
-            output.push(mapping);
         }
     }
-
 
     let mut text = String::with_capacity(output.len() * 10);
     for mapping in output {
