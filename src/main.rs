@@ -1,4 +1,4 @@
-use std::{collections::HashSet, env};
+use std::{collections::{HashMap, HashSet}, env, hash::Hash, ops::{AddAssign, SubAssign}};
 
 use calamine::{open_workbook, Data, Reader, Xlsx};
 
@@ -26,8 +26,9 @@ struct Mapping {
     simp: char,
 }
 
+
 /// 类推规则
-struct Infer {
+struct Rule {
     premise: Mapping,
     output: Vec<Mapping>
 }
@@ -50,19 +51,13 @@ fn parse_review(row: &[Data]) -> Review {
     }
 }
 
-
-
 /// 把批评批量换算为简化，且按需过滤掉不需要的映射规则
-fn derive_mappings(reviews: Vec<Review>, patch: bool) -> Vec<Mapping> {
+fn derive_mappings(reviews: Vec<Review>) -> Vec<Mapping> {
     let mut mappings = Vec::new();
     for review in reviews {
         let mapping = review.derive_mapping();
-        // 在补丁中，不需要重复原规则
-        if patch && mapping == review.mapping {
-            continue;
-        }
-        // 在完整映射表中，形如 X -> X 的映射规则是多余的
-        if !patch && mapping.trad == mapping.simp {
+        // 形如 X -> X 的映射规则是多余的
+        if mapping.trad == mapping.simp {
             continue;
         }
         mappings.push(mapping)
@@ -83,35 +78,76 @@ impl CharExt for char {
 }
 
 /// 生成 OpenCC 映射表
-fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: Vec<Review>, infers: Vec<Infer>, patch: bool) {
+fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: Vec<Review>, rules: Vec<Rule>) {
     let mut premise = HashSet::new();
-
     let mut output = Vec::new();
-
     // 非类推字用于输出
-    output.extend(derive_mappings(char_reviews, patch));
-
+    output.extend(derive_mappings(char_reviews));
     // 偏旁作为类推的依据
-    premise.extend(derive_mappings(radical_reviews, patch));
-
+    premise.extend(derive_mappings(radical_reviews));
     // 非类推字既能用于输出，又能用于类推
-    let ichar_mappings = derive_mappings(ichar_reviews, patch);
+    let ichar_mappings = derive_mappings(ichar_reviews);
     output.extend(ichar_mappings.as_slice());
     premise.extend(ichar_mappings.as_slice());
 
 
-    // 输出满足前提的类推
-    // TODO 有以下三个问题没有解决：
-    // 递归类推：类推得到的映射再次作为类推的依据（故需把繁字作为 key）
-    // 链式类推：映射的简字可根据其他依据进行再次类推（故需把简字作为 key）
-    // 多因类推：由多条类推规则共同生成的类推
-    // 另外还要想办法保留插入顺序（故不能用 HashMap）
-    for infer in infers {
-        if premise.contains(&infer.premise) {
-            output.extend(infer.output)
+    // 整理类推：给每一组类推简化评分，并把当中**可用**的那些按繁字归类
+    // 至少要有一个依据被用户承认才能算「可用」
+    let mut trad_to_mappings = HashMap::new();
+    let mut scores = HashMap::new();
+    for rule in rules.iter() {
+        if premise.contains(&rule.premise) {
+            for mapping in rule.output.iter().cloned() {
+                scores.entry(mapping).or_insert(0).add_assign(1);
+                trad_to_mappings.entry(mapping.trad).or_insert_with(HashSet::new).insert(mapping);
+            }
+        } else {
+            for mapping in rule.output.iter().cloned() {
+                scores.entry(mapping).or_insert(0).sub_assign(1);
+            }
         }
     }
-    
+
+    // 处理发生冲突的可用类推，只保留最高分的那个
+    let mut trad_to_mapping = HashMap::new();
+    for (trad, mappings) in trad_to_mappings {
+        let mut mappings = mappings.into_iter();
+        let mut best_mapping = mappings.next().unwrap();
+        let mut best_score = scores[&best_mapping];
+        for mapping in mappings {
+            let score = scores[&mapping];
+            if score > best_score {
+                best_mapping = mapping;
+                best_score = score;
+            }
+        }
+        trad_to_mapping.insert(trad, best_mapping);
+    }
+
+    // 链式类推：简字可以根据类推规则变得更简
+    for mapping in output.iter_mut() {
+        let Some(chained_mapping) = trad_to_mapping.get(&mapping.simp) else {
+            continue;
+        };
+        mapping.simp = chained_mapping.simp;
+    }
+
+    // 把可用的类推追加到输出里
+    for rule in rules {
+        if !premise.contains(&rule.premise) {
+            continue;
+        }
+        for mapping in rule.output {
+            // 过滤掉低分的类推规则，不予输出
+            if trad_to_mapping[&mapping.trad] != mapping {
+                continue;
+            }
+            output.push(mapping);
+        }
+    }
+
+
+    // 输出到文件和控制台
     for mapping in output {
         println!("{}\t{}", mapping.trad, mapping.simp)
     }
@@ -121,8 +157,6 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
 fn main() {
 
     let path = env::args().nth(1).unwrap_or("./简化字批评.xlsx".to_string());
-    let patch = false;
-
     let mut workbook: Xlsx<_> = open_workbook(path).unwrap();
 
     // 非类推字
@@ -133,7 +167,6 @@ fn main() {
     {
         char_reviews.push(parse_review(row))
     }
-
 
     // 类推字和偏旁
     let mut ichar_reviews = Vec::new();
@@ -148,20 +181,18 @@ fn main() {
         }
     }
 
-
     // 类推规则
-    let mut infers = Vec::new();
-    for row in workbook.worksheet_range("类推").unwrap().rows().skip(1) {
+    let mut rules = Vec::new();
+    for row in workbook.worksheet_range("表三").unwrap().rows().skip(1) {
         let premise = Mapping {
             trad: row[0].to_string().chars().next().unwrap(),
             simp: row[1].to_string().chars().next().unwrap(),
         };
 
-        // TODO：含有多个可类推部件的汉字只类推一个部件时所得到结果可能需要用 IDS 表达。
-        // char 无法储存 IDS，故 Mapping 也无法记录部分类推
         let mut output = Vec::new();
-        let string = row[2].to_string();
-        let mut chars = string.chars();
+        let row_2 = row[2].to_string();
+        let row_3 = row[3].to_string();
+        let mut chars = row_2.chars().chain(row_3.chars());
         loop {
             let Some(ch) = chars.next() else {
                 break;
@@ -175,11 +206,11 @@ fn main() {
             })
         }
         if !output.is_empty() {
-            infers.push(Infer{ premise, output })
+            rules.push(Rule{ premise, output })
         }
     }
 
-    gen(char_reviews, ichar_reviews, radical_reviews, infers, patch);
+    gen(char_reviews, ichar_reviews, radical_reviews, rules);
 }
 
 
