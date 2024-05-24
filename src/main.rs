@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, env, hash::Hash, ops::{AddAssign, SubAssign}};
+use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}};
 
 use calamine::{open_workbook, Data, Reader, Xlsx};
 
@@ -77,6 +77,7 @@ impl CharExt for char {
     }
 }
 
+
 /// 生成 OpenCC 映射表
 fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: Vec<Review>, rules: Vec<Rule>) {
     let mut premise = HashSet::new();
@@ -124,12 +125,14 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
         trad_to_mapping.insert(trad, best_mapping);
     }
 
-    // 链式类推：简字可以根据类推规则变得更简
+    // 固定类推：若已有简化 A->B 被定义，那么类推 A->C 被无视
+    // 链式类推：若已有简化 A->B 被定义，那么类推 B->C 与类推 A->B 合并为 A->C
+    let mut pinned_trads = HashSet::new();
     for mapping in output.iter_mut() {
-        let Some(chained_mapping) = trad_to_mapping.get(&mapping.simp) else {
-            continue;
+        pinned_trads.insert(mapping.trad);
+        if let Some(chain) = trad_to_mapping.get(&mapping.simp) {
+            mapping.simp = chain.simp;
         };
-        mapping.simp = chained_mapping.simp;
     }
 
     // 把可用的类推追加到输出里
@@ -138,8 +141,10 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
             continue;
         }
         for mapping in rule.output {
-            // 过滤掉低分的类推规则，不予输出
             if trad_to_mapping[&mapping.trad] != mapping {
+                continue;
+            }
+            if pinned_trads.contains(&mapping.trad) {
                 continue;
             }
             output.push(mapping);
@@ -147,10 +152,15 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
     }
 
 
-    // 输出到文件和控制台
+    let mut text = String::with_capacity(output.len() * 10);
     for mapping in output {
-        println!("{}\t{}", mapping.trad, mapping.simp)
+        text.push(mapping.trad);
+        text.push('\t');
+        text.push(mapping.simp);
+        text.push('\n');
     }
+    print!("{text}");
+    fs::write("./TSCharacters.txt", text).unwrap()
 }
 
 
