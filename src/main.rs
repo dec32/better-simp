@@ -1,7 +1,7 @@
-use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}, path::{self, Path}};
+use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}};
 
 use calamine::{open_workbook, Data, Reader, Xlsx};
-use getargs::{Arg, Options, Positionals};
+use getargs::{Arg, Options};
 
 /// 表示一组简化和对其的批评。Critique 这个词太难打了，所以使用 Review。
 #[derive(Clone, Copy)]
@@ -37,8 +37,8 @@ struct Rule {
 /// 把一行数据翻译为一则批评
 fn parse_review(row: &[Data]) -> Review {
     let mapping = Mapping {
-        trad: row[0].to_string().chars().next().unwrap(),
-        simp: row[1].to_string().chars().next().unwrap(),
+        trad: row[0].to_string().chars().next().expect(&format!("解析异常：{:?}", row)),
+        simp: row[1].to_string().chars().next().expect(&format!("解析异常：{:?}", row)),
     };
 
     let precise = row[2].to_string();
@@ -168,32 +168,29 @@ fn main() {
             Arg::Long("rime") | Arg::Short('r') => {
                 output_path = format!("{}/rime/opencc/TPCharacters.txt", env::var_os("APPDATA").unwrap().to_str().unwrap()).leak();
             }
-            Arg::Positional(p) => {
-                workbook_path = p;
+            Arg::Long("input") | Arg::Short('i')=> {
+                workbook_path = opts.value_opt().expect("获取输入路径时发生异常。")
             }
             Arg::Long("output") | Arg::Short('o') => {
-                output_path = opts.value_opt().expect("无法获取输出路径参数。")
+                output_path = opts.value_opt().expect("获取输出路径时发生异常。")
             }
             _ => {
                 println!("使用: ");
-                println!("  simp [<路径>][--output <输出目标>][--rime]");
+                println!("  simp [--input <表格路径>][--output <字典路径>][--rime]");
                 println!("说明: ");
-                println!("  位置参数: 表格路径，默认为 ./简化字批评.xlsx");
+                println!("  --input:  表格路径，默认为 ./简化字批评.xlsx");
                 println!("  --output: 输出路径，默认为 ./TSCharacters.txt");
-                println!("  --rime: 把方案自动输出到 %APPDATA%/rime/opencc 供 RIME 使用");
+                println!("  --rime:   输出到 %APPDATA%/rime/opencc 供 RIME 使用");
                 return;
             }
         }
     }
 
-    let mut workbook: Xlsx<_> = open_workbook(workbook_path).unwrap();
+    let mut workbook: Xlsx<_> = open_workbook(workbook_path).expect("打开表格失败。");
 
     // 非类推字
     let mut char_reviews = Vec::new();
-    for row in workbook.worksheet_range("表一").unwrap().rows().skip(1)
-        .chain(workbook.worksheet_range("其他").unwrap().rows().skip(1))
-        .chain(workbook.worksheet_range("增补").unwrap().rows().skip(1))
-    {
+    for row in workbook.worksheet_range("表一").unwrap().rows().skip(1) {
         char_reviews.push(parse_review(row))
     }
 
@@ -201,6 +198,7 @@ fn main() {
     let mut ichar_reviews = Vec::new();
     let mut radical_reviews = Vec::new();
     for row in workbook.worksheet_range("表二").unwrap().rows().skip(1)
+        .chain(workbook.worksheet_range("其他").unwrap().rows().skip(1))
     {
         let review = parse_review(row);
         if review.mapping.trad.is_radical() {
@@ -212,7 +210,7 @@ fn main() {
 
     // 类推规则
     let mut rules = Vec::new();
-    for row in workbook.worksheet_range("表三").unwrap().rows().skip(1) {
+    for row in workbook.worksheet_range("类推").unwrap().rows().skip(1) {
         let premise = Mapping {
             trad: row[0].to_string().chars().next().unwrap(),
             simp: row[1].to_string().chars().next().unwrap(),
