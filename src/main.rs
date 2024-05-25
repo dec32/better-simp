@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}};
+use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}, path::PathBuf};
 
 use calamine::{open_workbook, Data, Reader, Xlsx};
 use getargs::{Arg, Options};
@@ -166,7 +166,9 @@ fn main() {
     while let Some(opt) = opts.next_arg().expect("无法解析命令行参数。") {
         match opt {
             Arg::Long("rime") | Arg::Short('r') => {
-                output_path = format!("{}/rime/opencc/TPCharacters.txt", env::var_os("APPDATA").unwrap().to_str().unwrap()).leak();
+                let opencc_path = PathBuf::from(env::var_os("APPDATA").unwrap()).join("rime/opencc");
+                output_path = opencc_path.join("TPCharacters.txt").to_string_lossy().to_string().leak();
+                fs::write(opencc_path.join("t2p.json"), include_str!("../t2p.json")).unwrap();
             }
             Arg::Long("input") | Arg::Short('i')=> {
                 workbook_path = opts.value_opt().expect("获取输入路径时发生异常。")
