@@ -11,7 +11,7 @@ struct Review {
 }
 
 impl Review {
-    fn derive_mapping(&self) -> Mapping {
+    fn correct_mapping(&self) -> Mapping {
         if let Some(fix) = self.fix {
             Mapping {trad: self.mapping.trad, simp: fix}
         } else {
@@ -52,15 +52,11 @@ fn parse_review(row: &[Data]) -> Review {
     }
 }
 
-/// 把批评批量换算为简化，且按需过滤掉不需要的映射规则
-fn derive_mappings(reviews: Vec<Review>) -> Vec<Mapping> {
+/// 把批评批量换算为简化
+fn correct_mappings(reviews: Vec<Review>) -> Vec<Mapping> {
     let mut mappings = Vec::new();
     for review in reviews {
-        let mapping = review.derive_mapping();
-        // 形如 X -> X 的映射规则是多余的
-        if mapping.trad == mapping.simp {
-            continue;
-        }
+        let mapping = review.correct_mapping();
         mappings.push(mapping)
     }
     mappings
@@ -84,24 +80,24 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
     let mut premise = HashSet::new();
     let mut output = Vec::new();
     // 非类推字用于输出
-    output.extend(derive_mappings(char_reviews));
+    output.extend(correct_mappings(char_reviews));
     // 偏旁作为类推的依据
-    premise.extend(derive_mappings(radical_reviews));
+    premise.extend(correct_mappings(radical_reviews));
     // 非类推字既能用于输出，又能用于类推
-    let ichar_mappings = derive_mappings(ichar_reviews);
+    let ichar_mappings = correct_mappings(ichar_reviews);
     output.extend(ichar_mappings.as_slice());
     premise.extend(ichar_mappings.as_slice());
 
 
     // 整理类推：给每一组类推简化评分，并把当中**可用**的那些按繁字归类
     // 至少要有一个依据被用户承认才能算「可用」
-    let mut inferred_mappings = HashMap::new();
+    let mut derived_mappings = HashMap::new();
     let mut scores = HashMap::new();
     for rule in rules.iter() {
         if premise.contains(&rule.premise) {
             for mapping in rule.output.iter().cloned() {
                 scores.entry(mapping).or_insert(0).add_assign(1);
-                inferred_mappings.entry(mapping.trad).or_insert_with(HashSet::new).insert(mapping);
+                derived_mappings.entry(mapping.trad).or_insert_with(HashSet::new).insert(mapping);
             }
         } else {
             for mapping in rule.output.iter().cloned() {
@@ -111,10 +107,10 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
     }
 
     // 处理发生冲突的可用类推，只保留最高分的那个
-    let mut inferred_simps = HashMap::new();
-    for (trad, mappings) in inferred_mappings {
+    let mut derived_simps = HashMap::new();
+    for (trad, mappings) in derived_mappings {
         let best_simp = mappings.into_iter().max_by(|m1, m2|scores[m1].cmp(&scores[m2])).unwrap().simp;
-        inferred_simps.insert(trad, best_simp);
+        derived_simps.insert(trad, best_simp);
     }
 
     // 固定类推：若已有简化 A->B 被定义，那么类推 A->C 被无视
@@ -122,8 +118,8 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
     let mut pinned_trads = HashSet::new();
     for mapping in output.iter_mut() {
         pinned_trads.insert(mapping.trad);
-        if let Some(simpler_simp) = inferred_simps.get(&mapping.simp).cloned() {
-            mapping.simp = simpler_simp;
+        if let Some(simpler) = derived_simps.get(&mapping.simp).cloned() {
+            mapping.simp = simpler;
         };
     }
 
@@ -133,18 +129,29 @@ fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: V
             continue;
         }
         for mapping in rule.output {
-            if mapping.simp == inferred_simps[&mapping.trad] {
-                output.push(mapping)
+            if pinned_trads.contains(&mapping.trad) {
+                continue;
             }
+            if mapping.simp != derived_simps[&mapping.trad] {
+                continue;
+            }
+            output.push(mapping)
         }
     }
 
     // 输出到文件
     let mut text = String::with_capacity(output.len() * 10);
-    let mut dup = HashSet::new();
+    let mut dup = HashMap::new();
     for mapping in output {
         // OpenCC 不允许重复项
-        if !dup.insert(mapping.trad) {
+        if let Some(prev) = dup.insert(mapping.trad, mapping.simp) {
+            if prev != mapping.simp {
+                println!("检测到冲突「{}{{{}|{}}}」", mapping.trad, prev, mapping.simp)
+            }
+            continue;
+        }
+        // 拋弃形如 X -> X 的映射规则（留到此处才删除是因为 X -> X 可能有「抑制」类推的用意）
+        if mapping.trad == mapping.simp {
             continue;
         }
         text.push(mapping.trad);
