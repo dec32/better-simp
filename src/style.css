@@ -1,0 +1,50 @@
+.main {
+    margin: auto;
+    max-width: 20cm;
+    font-family: 'LXGW WenKai GB', 'LXGW WenKai', 'LXGW WenKai GB', serif;
+}
+h1 {
+    text-align: center;
+}
+.tags {
+    text-align: center;
+    padding-top: 10pt;
+    padding-bottom: 10pt;  
+}
+.group-title {
+    font-size: 18pt;
+    text-align: center;
+    background-color: rgb(230, 230, 230);
+    margin-top: 10pt;
+    margin-bottom: 10pt;
+}
+.row {
+    display: flex;
+    border-bottom: 1px solid rgb(230, 230, 230);
+    padding-top: 2pt;
+    padding-bottom: 2pt;
+}
+.entry {
+    display: flex;
+}
+.simp {
+    font-size: 28pt;
+    font-weight: bold;
+}
+.trad {
+    font-size: 13pt;
+}
+.fix {
+    font-size: 13pt;
+}
+.tag {
+    font-size: 10pt;
+    border: 1px solid;
+    border-radius: 2pt;
+    padding-left: 3pt;
+    padding-right: 3pt;
+
+    color: rgb(75, 75, 75);
+    border-color: grey;
+    background-color: rgb(230, 230, 230);
+}

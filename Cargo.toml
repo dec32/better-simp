@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 calamine = "0.24.0"
 getargs = "0.5.0"
+maud = "0.26.0"

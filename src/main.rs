@@ -1,23 +1,30 @@
-use std::{collections::{HashMap, HashSet}, env, fs, hash::Hash, ops::{AddAssign, SubAssign}, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
-use calamine::{open_workbook, Data, Reader, Xlsx};
+use calamine::Data;
 use getargs::{Arg, Options};
 
-/// 表示一组简化和对其的批评。Critique 这个词太难打了，所以使用 Review。
-#[derive(Clone, Copy)]
+mod doc;
+mod dict;
+
+/// 表示一组简化和对其的订正
+#[derive(Clone)]
 struct Review {
+    // 供字典生成用
     mapping: Mapping,
-    fix: Option<char>
+    fix: Option<char>,
+    // 更详细的内容，供文档生成用
+    precise: String,
+    level: Level,
+    tags: Vec<String>,
+    comment: String,
 }
 
-impl Review {
-    fn correct_mapping(&self) -> Mapping {
-        if let Some(fix) = self.fix {
-            Mapping {trad: self.mapping.trad, simp: fix}
-        } else {
-            self.mapping
-        }
-    }
+// 表示一个批评的激进程度
+#[derive(Clone, PartialEq, Eq)]
+enum Level {
+    Normal,
+    Radical,
+    Questionable
 }
 
 /// 表示一组简化
@@ -41,25 +48,39 @@ fn parse_review(row: &[Data]) -> Review {
         simp: row[1].to_string().chars().next().expect(&format!("解析异常：{:?}", row)),
     };
 
-    let precise = row[2].to_string();
+    let mut precise = row[2].to_string();
     let compatible = row[3].to_string().chars().next();
+    let tags = row[4].to_string().split(char::is_whitespace)
+        .filter(|s|!s.is_empty())
+        .map(String::from)
+        .collect::<Vec<_>>();
+    let comment = {
+        // 补一下懒得写的句号
+        let mut comment = row[5].to_string();
+        if let Some(last) = comment.chars().last() {
+            if !matches!(last, '。' | '？' | '！') {
+                comment.push('。');
+            }
+        }
+        comment
+    };
 
-    if precise.is_empty() || precise.ends_with("？") {
-        Review { mapping, fix: None }
-    } else {
+    let level = match precise.chars().last() {
+        Some('？') => Level::Questionable,
+        Some('！') => Level::Radical,
+        _ => Level::Normal
+    };
+    if level != Level::Normal {
+        precise.pop();
+    }
+
+    let fix = match level {
+        Level::Questionable => None,
         // TODO 校验 presice 字符串的格式
-        Review { mapping, fix: compatible.or(precise.chars().next())}
-    }
-}
+        _ => compatible.or(precise.chars().next())
+    };
 
-/// 把批评批量换算为简化
-fn correct_mappings(reviews: Vec<Review>) -> Vec<Mapping> {
-    let mut mappings = Vec::new();
-    for review in reviews {
-        let mapping = review.correct_mapping();
-        mappings.push(mapping)
-    }
-    mappings
+    Review {mapping, fix, precise, level, tags, comment}
 }
 
 
@@ -75,97 +96,10 @@ impl CharExt for char {
 }
 
 
-/// 生成 OpenCC 映射表
-fn gen(char_reviews: Vec<Review>, ichar_reviews: Vec<Review>, radical_reviews: Vec<Review>, rules: Vec<Rule>, output_path: &str){
-    let mut premise = HashSet::new();
-    let mut output = Vec::new();
-    // 非类推字用于输出
-    output.extend(correct_mappings(char_reviews));
-    // 偏旁作为类推的依据
-    premise.extend(correct_mappings(radical_reviews));
-    // 非类推字既能用于输出，又能用于类推
-    let ichar_mappings = correct_mappings(ichar_reviews);
-    output.extend(ichar_mappings.as_slice());
-    premise.extend(ichar_mappings.as_slice());
-
-
-    // 整理类推：给每一组类推简化评分，并把当中**可用**的那些按繁字归类
-    // 至少要有一个依据被用户承认才能算「可用」
-    let mut derived_mappings = HashMap::new();
-    let mut scores = HashMap::new();
-    for rule in rules.iter() {
-        if premise.contains(&rule.premise) {
-            for mapping in rule.output.iter().cloned() {
-                scores.entry(mapping).or_insert(0).add_assign(1);
-                derived_mappings.entry(mapping.trad).or_insert_with(HashSet::new).insert(mapping);
-            }
-        } else {
-            for mapping in rule.output.iter().cloned() {
-                scores.entry(mapping).or_insert(0).sub_assign(1);
-            }
-        }
-    }
-
-    // 处理发生冲突的可用类推，只保留最高分的那个
-    let mut derived_simps = HashMap::new();
-    for (trad, mappings) in derived_mappings {
-        let best_simp = mappings.into_iter().max_by(|m1, m2|scores[m1].cmp(&scores[m2])).unwrap().simp;
-        derived_simps.insert(trad, best_simp);
-    }
-
-    // 固定类推：若已有简化 A->B 被定义，那么类推 A->C 被无视
-    // 链式类推：若已有简化 A->B 被定义，那么类推 B->C 与类推 A->B 合并为 A->C
-    let mut pinned_trads = HashSet::new();
-    for mapping in output.iter_mut() {
-        pinned_trads.insert(mapping.trad);
-        if let Some(simpler) = derived_simps.get(&mapping.simp).cloned() {
-            mapping.simp = simpler;
-        };
-    }
-
-    // 把可用的类推追加到输出里（但要按照表格的顺序来）
-    for rule in rules {
-        if !premise.contains(&rule.premise) {
-            continue;
-        }
-        for mapping in rule.output {
-            if pinned_trads.contains(&mapping.trad) {
-                continue;
-            }
-            if mapping.simp != derived_simps[&mapping.trad] {
-                continue;
-            }
-            output.push(mapping)
-        }
-    }
-
-    // 输出到文件
-    let mut text = String::with_capacity(output.len() * 10);
-    let mut dup = HashMap::new();
-    for mapping in output {
-        // OpenCC 不允许重复项
-        if let Some(prev) = dup.insert(mapping.trad, mapping.simp) {
-            if prev != mapping.simp {
-                println!("检测到冲突「{}{{{}|{}}}」", mapping.trad, prev, mapping.simp)
-            }
-            continue;
-        }
-        // 拋弃形如 X -> X 的映射规则（留到此处才删除是因为 X -> X 可能有「抑制」类推的用意）
-        if mapping.trad == mapping.simp {
-            continue;
-        }
-        text.push(mapping.trad);
-        text.push('\t');
-        text.push(mapping.simp);
-        text.push('\n');
-    }
-    fs::write(output_path, text).unwrap();
-}
-
-
 fn main() {
     let mut workbook_path = "./简化字批评.xlsx";
     let mut output_path = "./TSCharacters.txt";
+    let mut doc = false;
 
     let args = env::args().skip(1).collect::<Vec<_>>();
     let args = args.iter().map(String::as_str);
@@ -177,6 +111,9 @@ fn main() {
                 output_path = opencc_path.join("TPCharacters.txt").to_string_lossy().to_string().leak();
                 fs::write(opencc_path.join("t2p.json"), include_str!("../t2p.json")).unwrap();
             }
+            Arg::Long("doc") | Arg::Short('d') => {
+                doc = true;
+            }
             Arg::Long("input") | Arg::Short('i')=> {
                 workbook_path = opts.value_opt().expect("获取输入路径时发生异常。")
             }
@@ -185,7 +122,7 @@ fn main() {
             }
             _ => {
                 println!("使用: ");
-                println!("  simp [--input <表格路径>][--output <字典路径>][--rime]");
+                println!("  simp [--input <表格路径>][--output <输出路径>][--rime]");
                 println!("说明: ");
                 println!("  --input:  表格路径，默认为 ./简化字批评.xlsx");
                 println!("  --output: 输出路径，默认为 ./TSCharacters.txt");
@@ -195,58 +132,12 @@ fn main() {
         }
     }
 
-    let mut workbook: Xlsx<_> = open_workbook(workbook_path).expect("打开表格失败。");
-
-    // 非类推字
-    let mut char_reviews = Vec::new();
-    for row in workbook.worksheet_range("表一").unwrap().rows().skip(1) {
-        char_reviews.push(parse_review(row))
+    if doc {
+        output_path = "simp-critique.html";
+        doc::gen(workbook_path, output_path);
+    } else {
+        dict::gen(workbook_path, output_path);
     }
-
-    // 类推字和偏旁
-    let mut ichar_reviews = Vec::new();
-    let mut radical_reviews = Vec::new();
-    for row in workbook.worksheet_range("表二").unwrap().rows().skip(1)
-        .chain(workbook.worksheet_range("其他").unwrap().rows().skip(1))
-    {
-        let review = parse_review(row);
-        if review.mapping.trad.is_radical() {
-            radical_reviews.push(review);
-        } else {
-            ichar_reviews.push(parse_review(row))
-        }
-    }
-
-    // 类推规则
-    let mut rules = Vec::new();
-    for row in workbook.worksheet_range("类推").unwrap().rows().skip(1) {
-        let premise = Mapping {
-            trad: row[0].to_string().chars().next().unwrap(),
-            simp: row[1].to_string().chars().next().unwrap(),
-        };
-
-        let mut output = Vec::new();
-        let row_2 = row[2].to_string();
-        let row_3 = row[3].to_string();
-        let mut chars = row_2.chars().chain(row_3.chars());
-        loop {
-            let Some(ch) = chars.next() else {
-                break;
-            };
-            if ch.is_whitespace() {
-                continue;
-            }
-            output.push(Mapping {
-                trad: ch,
-                simp: chars.next().expect(&format!("类推「{}{}」中「{}」缺少对应的简化字", premise.trad, premise.simp, ch))
-            })
-        }
-        if !output.is_empty() {
-            rules.push(Rule{ premise, output })
-        }
-    }
-
-    gen(char_reviews, ichar_reviews, radical_reviews, rules, output_path);
 }
 
 
