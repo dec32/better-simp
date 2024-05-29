@@ -3,14 +3,48 @@
     max-width: 20cm;
     font-family: 'LXGW WenKai GB', 'LXGW WenKai', 'LXGW WenKai GB', serif;
 }
+
 h1 {
     text-align: center;
 }
-.tags {
+
+.filters {
     text-align: center;
     padding-top: 10pt;
-    padding-bottom: 10pt;  
+    padding-bottom: 10pt;
 }
+
+.filter {
+    cursor: pointer;
+}
+
+.filter:hover {
+    background-color: rgb(240, 240, 240);
+}
+
+.tag {
+    font-size: 10pt;
+    
+    border: 1px solid;
+    border-radius: 2pt;
+    padding-left: 3pt;
+    padding-right: 3pt;
+    margin-right: 2pt;
+    white-space:nowrap;
+
+    color: rgb(75, 75, 75);
+    border-color: grey;
+    background-color: rgb(230, 230, 230);
+
+    user-select: none;
+}
+
+.disabled {
+    color: rgb(170, 170, 170);
+    border: 1px dotted;
+    background-color: rgb(250, 250, 250);
+}
+
 .group-title {
     font-size: 18pt;
     text-align: center;
@@ -26,6 +60,7 @@ h1 {
 }
 .entry {
     display: flex;
+    padding-right: 6pt;
 }
 .simp {
     font-size: 28pt;
@@ -37,14 +72,8 @@ h1 {
 .fix {
     font-size: 13pt;
 }
-.tag {
-    font-size: 10pt;
-    border: 1px solid;
-    border-radius: 2pt;
-    padding-left: 3pt;
-    padding-right: 3pt;
 
-    color: rgb(75, 75, 75);
-    border-color: grey;
-    background-color: rgb(230, 230, 230);
-}
+
+
+
+
