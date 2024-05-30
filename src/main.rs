@@ -3,7 +3,7 @@ use std::{env, fs, path::PathBuf};
 use calamine::Data;
 use getargs::{Arg, Options};
 
-mod doc;
+mod page;
 mod dict;
 
 /// 表示一组简化和对其的订正
@@ -99,7 +99,7 @@ impl CharExt for char {
 fn main() {
     let mut workbook_path = "./简化字批评.xlsx";
     let mut output_path = "./TSCharacters.txt";
-    let mut doc = false;
+    let mut page = false;
 
     let args = env::args().skip(1).collect::<Vec<_>>();
     let args = args.iter().map(String::as_str);
@@ -111,8 +111,8 @@ fn main() {
                 output_path = opencc_path.join("TPCharacters.txt").to_string_lossy().to_string().leak();
                 fs::write(opencc_path.join("t2p.json"), include_str!("../t2p.json")).unwrap();
             }
-            Arg::Long("doc") | Arg::Short('d') => {
-                doc = true;
+            Arg::Long("page") | Arg::Short('p') => {
+                page = true;
             }
             Arg::Long("input") | Arg::Short('i')=> {
                 workbook_path = opts.value_opt().expect("获取输入路径时发生异常。")
@@ -132,9 +132,9 @@ fn main() {
         }
     }
 
-    if doc {
-        output_path = "simp-critique.html";
-        doc::gen(workbook_path, output_path);
+    if page {
+        output_path = "./page/index.html";
+        page::gen(workbook_path, output_path);
     } else {
         dict::gen(workbook_path, output_path);
     }

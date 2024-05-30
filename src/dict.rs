@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs, ops::{AddAssign, SubAssign}};
+use std::{collections::{HashMap, HashSet}, fs, ops::{AddAssign, SubAssign}, path::Path};
 
 use calamine::{open_workbook, Reader, Xlsx};
 
@@ -162,6 +162,9 @@ pub fn gen(workbook_path: &str, output_path: &str){
         text.push('\t');
         text.push(mapping.simp);
         text.push('\n');
+    }
+    if let Some(parent) = Path::new(output_path).parent() {
+        fs::create_dir_all(parent).unwrap();
     }
     fs::write(output_path, text).unwrap();
 }

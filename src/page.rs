@@ -1,7 +1,7 @@
-use std::{collections::HashMap, fs, ops::AddAssign};
+use std::{collections::HashMap, fs, ops::AddAssign, path::Path};
 
 use calamine::{open_workbook, Data, Range, Reader, Xlsx};
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use maud::{html, Markup, DOCTYPE};
 use crate::{parse_review, Problem, Review};
 
 
@@ -66,7 +66,7 @@ fn sort_tags(tags: &mut [String], counts: &HashMap<String, u16>) {
     tags.sort_by(|t1, t2| counts[t1].cmp(&counts[t2]).reverse())
 }
 
-// 生成文档
+// 生成页面
 pub fn gen(workbook_path: &str, output_path: &str) {
     let mut workbook: Xlsx<_> = open_workbook(workbook_path).expect("打开表格失败。");
 
@@ -95,27 +95,32 @@ pub fn gen(workbook_path: &str, output_path: &str) {
 
     let markup = html!(
         (DOCTYPE)
-        header {
-            title { "简化字批评" }
-            style { ( PreEscaped(include_str!("style.css")) ) }
-            script { ( PreEscaped(include_str!("script.js")) ) }
-            script { ( PreEscaped(include_str!("script2.js")) ) }
-        }
-        body {
-            div.main {
-                h1 { "简化字批评" }
-                div.filters {
-                    @for tag in tags {
-                        span.filter.tag onclick="toggle(this)" { ( tag )"("( counts[&tag] )")" }
+        html {
+            header {
+                title { "简化字批评" }
+                link rel="stylesheet" href="style.css";
+                script src="script.js" {}
+                script src="mojikumi.js" {}
+            }
+            body {
+                div.main {
+                    h1 { "简化字批评" }
+                    div.filters {
+                        @for tag in tags {
+                            span.filter.tag onclick="toggle(this)" { ( tag )"("( counts[&tag] )")" }
+                        }
                     }
+                    (tab_1)
+                    (tab_2)
+                    (other)
+                    div.links { a href="https://github.com/dec32/better-simp" {"GitHub"} }
                 }
-                (tab_1)
-                (tab_2)
-                (other)
-                div.links { a href="https://github.com/dec32/better-simp" {"GitHub"} }
             }
         }
     );
     let html = markup.into_string();
+    if let Some(parent) = Path::new(output_path).parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
     fs::write(output_path, html).unwrap()
 }

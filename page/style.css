@@ -27,12 +27,12 @@ h1 {
 }
 
 .filter:hover {
-    background-color: rgb(240, 240, 240);
+    background-color: hsl(0 0 98);
 }
 
 .tag {
     font-size: 10pt;
-    
+
     border: 1px solid;
     border-radius: 2pt;
     padding-left: 3pt;
@@ -40,23 +40,28 @@ h1 {
     margin-right: 2pt;
     white-space:nowrap;
 
-    color: rgb(75, 75, 75);
-    border-color: grey;
-    background-color: rgb(230, 230, 230);
+    color: hsl(0 0 30);
+    background-color: hsl(0 0 95);
+    border-color: hsl(0 0 80);
+
+    /* color: hsl(207 80 60);
+    background-color: hsl(0 0 100);
+    border-color: hsl(207, 70, 70); */
 
     user-select: none;
 }
 
 .disabled {
-    color: rgb(170, 170, 170);
     border: 1px dotted;
-    background-color: rgb(250, 250, 250);
+    color: hsl(0 0 70);
+    background-color: hsl(0 0 100);
 }
 
 .group-title {
     font-size: 14pt;
     text-align: center;
-    background-color: rgb(230, 230, 230);
+    background-color: hsl(0 0 95);
+    border-bottom: 1px solid hsl(0 0 90);
     padding-top: 3pt;
     padding-bottom: 3pt;
     margin-top: 7pt;
@@ -65,7 +70,7 @@ h1 {
 
 .row {
     display: flex;
-    border-bottom: 1px solid rgb(230, 230, 230);
+    border-bottom: 1px solid hsl(0 0 90);
     padding-top: 2pt;
     padding-bottom: 2pt;
 }
@@ -96,6 +101,9 @@ h1 {
     user-select: none;
 }
 
+.fix-box {
+    margin-left: -6pt;
+}
 .trad, .fix {
     font-size: 13pt;
 }
