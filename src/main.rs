@@ -14,18 +14,21 @@ struct Review {
     fix: Option<char>,
     // 更详细的内容，供文档生成用
     precise: String,
-    level: Level,
+    problem: Problem,
     tags: Vec<String>,
     comment: String,
 }
 
-// 表示一个批评的激进程度
+
+// 表示一则简化的问题有多大
 #[derive(Clone, PartialEq, Eq)]
-enum Level {
-    Normal,
-    Radical,
-    Questionable
+enum Problem {
+    Major,   // 问题很大，必须改
+    Neutral, // 问题不大，但我就是要改（用叹号标记）
+    Minor,   // 问题不大
+    None,    // 没问题
 }
+
 
 /// 表示一组简化
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -65,22 +68,19 @@ fn parse_review(row: &[Data]) -> Review {
         comment
     };
 
-    let level = match precise.chars().last() {
-        Some('？') => Level::Questionable,
-        Some('！') => Level::Radical,
-        _ => Level::Normal
+    // TODO 校验 presice 字符串的格式
+    let (problem, fix) = match precise.chars().last() {
+        None =>       (Problem::None,    None),
+        Some('？') => (Problem::Minor,   None),
+        Some('！') => (Problem::Neutral, compatible.or(precise.chars().next())),
+        Some(_) =>    (Problem::Major,   compatible.or(precise.chars().next()))
     };
-    if level != Level::Normal {
+
+    if matches!(problem, Problem::Minor | Problem::Neutral) {
         precise.pop();
     }
 
-    let fix = match level {
-        Level::Questionable => None,
-        // TODO 校验 presice 字符串的格式
-        _ => compatible.or(precise.chars().next())
-    };
-
-    Review {mapping, fix, precise, level, tags, comment}
+    Review {mapping, fix, precise, problem, tags, comment}
 }
 
 

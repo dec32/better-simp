@@ -1,7 +1,15 @@
+@import url(https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.1.0/style.css);
+@import url(https://unpkg.com/heti/umd/heti.min.css);
+
+/* 避免字族被 heti 覆盖 */
+.main, .tag, .comment{
+    font-family: 'LXGW WenKai GB', 'LXGW WenKai', sans-serif;
+    font-display: swap;
+}
+
 .main {
     margin: auto;
     max-width: 20cm;
-    font-family: 'LXGW WenKai GB', 'LXGW WenKai', 'LXGW WenKai GB', serif;
 }
 
 h1 {
@@ -46,31 +54,56 @@ h1 {
 }
 
 .group-title {
-    font-size: 18pt;
+    font-size: 14pt;
     text-align: center;
     background-color: rgb(230, 230, 230);
-    margin-top: 10pt;
-    margin-bottom: 10pt;
+    padding-top: 3pt;
+    padding-bottom: 3pt;
+    margin-top: 7pt;
+    margin-bottom: 7pt;
 }
+
 .row {
     display: flex;
     border-bottom: 1px solid rgb(230, 230, 230);
     padding-top: 2pt;
     padding-bottom: 2pt;
 }
-.entry {
+
+.char-cell {
     display: flex;
-    padding-right: 6pt;
+    margin-right: 3pt;
+}
+
+.simp-box {
+    position: relative;
+    width: 34pt;
+    height: 36pt;
 }
 .simp {
+    position: absolute;
+    top: 0;
+    left: 0;
     font-size: 28pt;
     font-weight: bold;
+    font-family: inherit;
 }
-.trad {
+.problem {
+    font-size: 12pt;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    user-select: none;
+}
+
+.trad, .fix {
     font-size: 13pt;
 }
-.fix {
-    font-size: 13pt;
+
+.links {
+    text-align: center;
+    padding-top: 15pt;
+    padding-bottom: 5pt;
 }
 
 
