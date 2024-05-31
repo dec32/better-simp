@@ -101,17 +101,17 @@ h1 {
 }
 
 .fix-box {
-    margin-left: -6pt;
+    margin-left: -10%;
 }
 
 .trad, .fix {
-    font-size: 13pt;
+    font-size: 16pt;
 }
 
 .glyph {
-    width: 13pt;
-    height: 13pt;
-    margin-bottom: -1pt;
+    width: 16pt;
+    height: 16pt;
+    margin-bottom: -5%;
 }
 
 .links {
