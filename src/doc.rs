@@ -1,13 +1,91 @@
-use std::{collections::HashMap, fs, ops::AddAssign, path::Path};
-
+use std::{collections::HashMap, fs, ops::AddAssign, path::{Path, PathBuf}};
+use anyhow::{Context, Result};
 use calamine::{open_workbook, Data, Range, Reader, Xlsx};
 use maud::{html, Markup, DOCTYPE};
+use serde_json::Value;
 use crate::{parse_review, Problem, Review};
 
 
 impl Review {
     fn is_relevant(&self) -> bool {
         !self.precise.is_empty() || !self.comment.is_empty()
+    }
+}
+
+fn collect_reviews(range: Range<Data>) -> Vec<Review> {
+    range.rows().skip(1).map(parse_review).filter(Review::is_relevant).collect()
+}
+
+fn sort_tags(tags: &mut [String], counts: &HashMap<String, u16>) {
+    tags.sort_by(|t1, t2| counts[t1].cmp(&counts[t2]).reverse())
+}
+
+
+fn render_ids(ids: &str) -> Result<String> {
+    let link = format!("IDS/{ids}.svg");
+    if fs::metadata(PathBuf::from("docs").join(&link)).is_ok() {
+        return Ok(link)
+    }
+    let mut percent_encoding = String::new();
+    for byte in ids.as_bytes().iter().cloned() {
+        percent_encoding.push('%');
+        // 给个不带 0x 的格式化选项是会死吗？
+        percent_encoding.push_str(&format!("{byte:#04X}")[2..]);
+    }
+    // 请求不多，字统网你忍一下……
+    let url =format!("https://zi.tools/api/ids/lookupids/{percent_encoding}?replace_token");
+    println!(">> {ids}");
+    let resp = reqwest::blocking::get(url)?.text()?;
+    let resp = serde_json::from_str::<Value>(&resp)?;
+    let svg = resp.get(ids)
+        .context("响应中不含 ids 数据")?
+        .get("svg")
+        .context("响应中不含 svg 数据")?
+        .to_string();
+    println!("<< {svg}");
+
+    // svg 为一系列的用 "|" 隔开多边形的坐标，而非完整的 svg 数据
+    // 另外，坐标里混杂了一些意义不明的字符（M L '），去掉才能
+    // 过滤掉就是了
+    let polygons = svg.split("|").map(|s|
+        s.chars().filter(|char|{
+            char.is_digit(10) || 
+            char.is_whitespace() || 
+            *char == '.' || 
+            *char == ','}
+        ).collect()
+    ).collect::<Vec<String>>();
+
+    let svg = html!(
+        svg  
+            version="1.1"
+            viewBox="0 0 200 200"
+            xmlns="http://www.w3.org/2000/svg"
+            xmlns:cc="http://creativecommons.org/ns#"
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        {
+            g {
+                @for points in polygons {
+                    polygon points=( points ) {}
+                }
+            }
+        }
+    );
+    fs::create_dir_all("docs/IDS").unwrap();
+    fs::write(PathBuf::from("docs").join(&link), svg.into_string())?;
+    return Ok(link)
+}
+
+
+// 经过渲染的表意文字序列，渲染失败时用 ? 代替
+fn ids(ids: &str) -> Markup {
+    match render_ids(ids) {
+        Ok(path) => html!(img.glyph src = (path);),
+        Err(err) => {
+            println!("无法渲染「{ids}」。 {err:?}");
+            html!("？")
+        }
     }
 }
 
@@ -26,13 +104,16 @@ fn row(review: Review) -> Markup {
                 }
              }
             div.fix-box {
-                div.trad { "〔"(review.mapping.trad)"〕" }
+                div.trad { "〔" (review.mapping.trad) "〕" }
                 @if review.precise.chars().next().filter(|ch|*ch != review.mapping.trad).is_some() {
-                    @if review.precise.chars().count() > 1 {
-                        // TODO: render IDS
-                        div.fix  { "（？）"}
-                    } @else {
-                        div.fix  { "（" (review.precise) "）"}
+                    div.fix  { 
+                        "（"
+                        @if review.precise.chars().count() > 1 {
+                            (ids(&review.precise))
+                        } @else {
+                            (review.precise) 
+                        }
+                        "）" 
                     }
                 }
             }
@@ -56,14 +137,6 @@ fn table(title: &str, reviews: Vec<Review>) -> Markup {
             div.row { (row(review)) }
         }
     )
-}
-
-fn collect_reviews(range: Range<Data>) -> Vec<Review> {
-    range.rows().skip(1).map(parse_review).filter(Review::is_relevant).collect()
-}
-
-fn sort_tags(tags: &mut [String], counts: &HashMap<String, u16>) {
-    tags.sort_by(|t1, t2| counts[t1].cmp(&counts[t2]).reverse())
 }
 
 // 生成页面
@@ -123,4 +196,12 @@ pub fn gen(workbook_path: &str, output_path: &str) {
         fs::create_dir_all(parent).unwrap();
     }
     fs::write(output_path, html).unwrap()
+}
+
+
+#[test]
+fn test_render() {
+    let ids = "⿸广⿱𤰔八";
+    let _ = fs::remove_file(format!("docs/IDS/{ids}.svg"));
+    render_ids(ids).unwrap();
 }

@@ -9,3 +9,7 @@ edition = "2021"
 calamine = "0.24.0"
 getargs = "0.5.0"
 maud = "0.26.0"
+serde_json = "1.0.117"
+reqwest = { version = "0.12.4", features = ["blocking"] }
+anyhow = "1.0.86"
+

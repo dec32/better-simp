@@ -3,7 +3,7 @@
 
 /* 避免字族被 heti 覆盖 */
 .main, .tag, .comment{
-    font-family: 'LXGW WenKai GB', 'LXGW WenKai', sans-serif;
+    font-family: 'LXGW WenKai GB', 'LXGW WenKai', sans-serif, 'SimSun-ExtB';
     font-display: swap;
 }
 
@@ -91,7 +91,6 @@ h1 {
     left: 0;
     font-size: 28pt;
     font-weight: bold;
-    font-family: inherit;
 }
 .problem {
     font-size: 12pt;
@@ -104,8 +103,15 @@ h1 {
 .fix-box {
     margin-left: -6pt;
 }
+
 .trad, .fix {
     font-size: 13pt;
+}
+
+.glyph {
+    width: 13pt;
+    height: 13pt;
+    margin-bottom: -1pt;
 }
 
 .links {
