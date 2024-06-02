@@ -31,7 +31,7 @@ h1 {
 }
 
 .tag {
-    font-size: 10pt;
+    font-size: .8rem;
 
     border: 1px solid;
     border-radius: 2pt;
@@ -58,7 +58,7 @@ h1 {
 }
 
 .group-title {
-    font-size: 14pt;
+    font-size: 1.2rem;
     text-align: center;
     background-color: hsl(0 0 95);
     border-bottom: 1px solid hsl(0 0 90);
@@ -82,18 +82,18 @@ h1 {
 
 .simp-box {
     position: relative;
-    width: 34pt;
-    height: 36pt;
+    width: 3rem;
+    height: 3rem;
 }
 .simp {
     position: absolute;
     top: 0;
     left: 0;
-    font-size: 28pt;
+    font-size: 2.3rem;
     font-weight: bold;
 }
 .problem {
-    font-size: 12pt;
+    font-size: 1rem;
     position: absolute;
     bottom: 0;
     right: 0;
@@ -105,12 +105,12 @@ h1 {
 }
 
 .trad, .fix {
-    font-size: 16pt;
+    font-size: 1.3rem;
 }
 
 .glyph {
-    width: 16pt;
-    height: 16pt;
+    width: 1.3rem;
+    height: 1.3rem;
     margin-bottom: -5%;
 }
 
