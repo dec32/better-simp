@@ -99,7 +99,7 @@ fn row(review: Review) -> Markup {
                     @match review.problem {
                         Problem::Major =>                    div { "" },// ⛔❌
                         Problem::Neutral | Problem::Minor => div { "🤔" }, // 🤔
-                        Problem::None =>                     div { "✅" }, // ✅✔️
+                        Problem::None =>                     div { "✔️" }, // ✅✔️
                     }
                 }
              }
