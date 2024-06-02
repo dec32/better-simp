@@ -121,10 +121,21 @@ fn row(review: Review) -> Markup {
         // 按理只需要把 .heti 作用在 span.comment 上就好了，但这样做会导致标签和文本之间发生段行
         // 原因未知
         div.comment-cell.heti {
-            @for tag in review.tags {
-                span.tag { (tag) }
+            @let mut paras = review.comment.split("\n").filter(|para|!para.is_empty());
+            p {
+                @for tag in review.tags {
+                    span.tag { (tag) }
+                }
+                @if let Some(para) = paras.next() {
+                    span.comment { (para) }
+                }
             }
-            span.comment { (review.comment) }
+
+            @for para in paras {
+                p {
+                    span.comment { (para) }
+                }
+            }
         }
     )
 }
